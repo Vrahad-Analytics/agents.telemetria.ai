@@ -99,10 +99,39 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to access:
-- **Overview Dashboard**: System metrics, token breakdown, and quick navigation.
-- **Traces View** (`/traces`): Inspect LLM executions, latency metrics, and child spans in real time.
-- **Playground** (`/playground`): Test prompts live through the AI Gateway reverse proxy with SSE streaming.
-- **Evaluations** (`/evaluations`): Benchmark prompt versions side-by-side against golden datasets.
+- **Public Landing Page**: Branded for `agents.telemetria.ai` with active agent metrics, waveform ticker, and direct auth triggers.
+- **Paid Project Dashboard** (`/app/vrahad/p/My%20Project`): Active observability dashboard displaying **Telemetria Pro Plan (Paid Active)** with $100 model credits, 50 GB ingestion logs, and 100k evals.
+- **Interactive In-App Views**: Logs, Dashboards, Patterns, Topics, Review, Playgrounds, Experiments, Datasets, Prompts, Scorers, Parameters, Tools, SQL Sandbox, and Loop AI Agent.
+
+---
+
+## MongoDB Atlas Integration & Authentication
+
+The platform stores users, passwords, organizations, and project records in **MongoDB Atlas** with bcrypt hashing:
+
+- **Cluster**: `vrahad-analytics-cluste.laihf2o.mongodb.net`
+- **Database**: `telemetria_agents`
+- **Collections**:
+  - `users`: User profiles, bcrypt password hashes, paid plan status (`plan: "Pro (Paid Active)"`, `is_paid: true`), and credit balance.
+  - `projects`: Project IDs, names, organization namespaces, and live ingestion API keys.
+
+### Authentication Endpoints:
+- `POST /v1/auth/register`: Register new team accounts.
+- `POST /v1/auth/login`: Authenticate email and password to receive JWT session tokens.
+- `GET /v1/auth/me`: Fetch current authenticated profile and active paid plan quotas.
+
+### Default Seed Admin:
+- **Email**: `admin@telemetria.ai`
+- **Password**: `telemetria2026`
+- **Plan**: `Pro (Paid Active)`
+
+---
+
+## First-Time Project Onboarding Flow
+
+1. On sign in, if a user has no projects or initializes a new workspace, the **Project Onboarding Wizard** prompts for Project Name, Primary Model (`GPT-4o` or `Claude 3.5 Sonnet`), and Environment.
+2. The backend generates a secure API key (`tlm_live_...`) and registers it in MongoDB.
+3. The dashboard transitions to the active project workspace and unlocks all **Paid Pro Plan** quotas.
 
 ---
 
