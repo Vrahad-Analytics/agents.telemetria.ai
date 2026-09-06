@@ -1,0 +1,21 @@
+{
+  "name": "LinkedService_AzureDatabricks",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "Azure Databricks cluster linked service for running telemetry batch jobs",
+    "annotations": [],
+    "type": "AzureDatabricks",
+    "typeProperties": {
+      "domain": "https://adb-1234567890123456.7.azuredatabricks.net",
+      "accessToken": {
+        "type": "AzureKeyVaultSecret",
+        "store": {
+          "referenceName": "LinkedService_AzureKeyVault",
+          "type": "LinkedServiceReference"
+        },
+        "secretName": "databricks-access-token"
+      },
+      "existingClusterId": "1001-200000-pool123"
+    }
+  }
+}
