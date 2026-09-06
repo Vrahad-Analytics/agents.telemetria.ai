@@ -40,12 +40,26 @@ class GatewayService:
             else:
                 provider = "openai"
 
+        # Check for user-connected provider key in MongoDB or parameter
+        actual_key = client_api_key
+        if not actual_key:
+            try:
+                from backend.core.mongodb import ResilientCollection
+                providers_col = ResilientCollection("project_providers")
+                p_doc = providers_col.find_one({"project_id": project.id, "provider_name": provider})
+                if p_doc and p_doc.get("api_key"):
+                    actual_key = p_doc.get("api_key")
+            except Exception:
+                pass
+
+        if not actual_key:
+            if provider == "openai":
+                actual_key = settings.OPENAI_API_KEY
+            elif provider == "anthropic":
+                actual_key = settings.ANTHROPIC_API_KEY
+
         # Check if we should use Mock Mode
-        is_mock = (
-            settings.GATEWAY_MOCK_MODE
-            or (provider == "openai" and not settings.OPENAI_API_KEY)
-            or (provider == "anthropic" and not settings.ANTHROPIC_API_KEY)
-        )
+        is_mock = settings.GATEWAY_MOCK_MODE or not actual_key
 
         start_time = datetime.now(timezone.utc)
         start_mono = time.monotonic()
@@ -92,14 +106,14 @@ class GatewayService:
         if provider == "openai":
             upstream_url = f"{settings.OPENAI_BASE_URL}/chat/completions"
             headers = {
-                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                "Authorization": f"Bearer {actual_key}",
                 "Content-Type": "application/json",
             }
         else:
             # Anthropic messages API
             upstream_url = f"{settings.ANTHROPIC_BASE_URL}/messages"
             headers = {
-                "x-api-key": settings.ANTHROPIC_API_KEY,
+                "x-api-key": actual_key,
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             }

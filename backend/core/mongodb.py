@@ -59,6 +59,7 @@ def is_atlas_connected() -> bool:
 class ResilientCollection:
     def __init__(self, collection_name: str):
         self.name = collection_name
+        _local_store.setdefault(self.name, {})
 
     def insert_one(self, document: Dict[str, Any]):
         doc_id = document.get("_id") or document.get("id") or str(len(_local_store[self.name]) + 1)

@@ -20,6 +20,7 @@ gateway_service = GatewayService()
 async def chat_completions_proxy(
     request: Request,
     x_provider: Optional[str] = Header(None, description="Optional target provider: 'openai' or 'anthropic'"),
+    x_provider_key: Optional[str] = Header(None, description="Optional personal API key for direct provider upstream"),
     project: Project = Depends(get_current_project),
     db: Session = Depends(get_db),
 ):
@@ -33,6 +34,7 @@ async def chat_completions_proxy(
         provider=x_provider or "",
         project=project,
         db=db,
+        client_api_key=x_provider_key,
     )
 
     if stream_gen is not None:

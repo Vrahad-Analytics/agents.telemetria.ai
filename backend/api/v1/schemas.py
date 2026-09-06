@@ -7,7 +7,7 @@ class SpanIngestItem(BaseModel):
     span_id: str = Field(..., description="Unique span ID")
     trace_id: str = Field(..., description="Trace ID this span belongs to")
     parent_span_id: Optional[str] = Field(None, description="Parent span ID if nested")
-    span_type: Literal["llm", "tool", "function"] = Field("function", description="Type of span")
+    span_type: str = Field("llm", description="Type of span (llm, tool, function, retrieval, agent)")
     model_name: Optional[str] = Field(None, description="Model name if LLM span")
     prompt_tokens: int = Field(0, ge=0, description="Tokens used in prompt")
     completion_tokens: int = Field(0, ge=0, description="Tokens used in completion")

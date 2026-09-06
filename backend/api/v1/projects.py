@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -43,14 +44,14 @@ def create_project(req: CreateProjectRequest, db: Session = Depends(get_db)):
     # Persist in MongoDB
     try:
         from backend.core.mongodb import projects_collection
-        from datetime import datetime
+        now = datetime.now(timezone.utc).isoformat()
         projects_collection.insert_one({
             "_id": proj.id,
             "id": proj.id,
             "name": proj.name,
             "org_id": proj.org_id,
             "api_key_prefix": raw_key[:10] + "...",
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": now
         })
     except Exception:
         pass
@@ -67,3 +68,15 @@ def create_project(req: CreateProjectRequest, db: Session = Depends(get_db)):
 def list_projects(db: Session = Depends(get_db)):
     projects = db.query(Project).all()
     return [ProjectResponse(id=p.id, name=p.name, org_id=p.org_id) for p in projects]
+
+
+@router.get("/{project_id}", response_model=ProjectResponse)
+def get_project(project_id: str, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(
+        (Project.id == project_id) | (Project.name == project_id)
+    ).first()
+    if not project:
+        project = db.query(Project).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectResponse(id=project.id, name=project.name, org_id=project.org_id)
