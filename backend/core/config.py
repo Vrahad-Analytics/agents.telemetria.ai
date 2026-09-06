@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         description="MongoDB connection URI",
     )
     MONGODB_USERNAME: str = "talk_db_user"
-    MONGODB_PASSWORD: str = "D6Emzx8Z87Sk9K4u"
+    MONGODB_PASSWORD: str = "XXXXXXXXXXXXXXX"
     MONGODB_DB_NAME: str = "telemetria_agents"
 
     model_config = SettingsConfigDict(
