@@ -1,0 +1,112 @@
+{
+  "name": "Pipeline_Telemetria_Daily_Batch",
+  "properties": {
+    "description": "Orchestrates daily ingestion of raw LLM telemetry logs from API staging to ADLS Gen2, then triggers Databricks PySpark job to populate Delta Lake traces_silver, spans_silver, and evaluations_gold tables.",
+    "parameters": {
+      "ExecutionDate": {
+        "type": "string",
+        "defaultValue": "@formatDateTime(utcnow(), 'yyyy/MM/dd')"
+      },
+      "Environment": {
+        "type": "string",
+        "defaultValue": "prod"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_Raw_Logs_To_ADLS",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 3,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "JsonSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "wildcardFolderPath": "@concat('staging/raw_logs/', pipeline().parameters.ExecutionDate)",
+              "wildcardFileName": "*.jsonl",
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "JsonReadSettings"
+            }
+          },
+          "sink": {
+            "type": "JsonSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings",
+              "copyBehavior": "PreserveHierarchy"
+            },
+            "formatSettings": {
+              "type": "JsonWriteSettings",
+              "fileExtension": ".jsonl"
+            }
+          },
+          "enableStaging": false
+        },
+        "inputs": [
+          {
+            "referenceName": "Dataset_Telemetry_Staging",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "Dataset_ADLS_Raw_Landing",
+            "type": "DatasetReference",
+            "parameters": {
+              "DirectoryPath": "@concat('telemetria-lake/raw/', pipeline().parameters.ExecutionDate)"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Databricks_Parse_Telemetry_Notebook",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Copy_Raw_Logs_To_ADLS",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 60,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": "/Shared/Telemetria/parse_telemetry_logs",
+          "baseParameters": {
+            "raw_logs_path": "abfss://raw@telemetrialake.dfs.core.windows.net",
+            "delta_silver_traces_path": "abfss://silver@telemetrialake.dfs.core.windows.net/traces_silver",
+            "delta_silver_spans_path": "abfss://silver@telemetrialake.dfs.core.windows.net/spans_silver",
+            "delta_gold_evals_path": "abfss://gold@telemetrialake.dfs.core.windows.net/evaluations_gold",
+            "target_date": "@pipeline().parameters.ExecutionDate"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LinkedService_AzureDatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [
+      "Telemetria",
+      "LLM-Observability",
+      "DeltaLake"
+    ]
+  }
+}
