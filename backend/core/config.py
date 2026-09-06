@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     # Gateway mock mode for local testing without active API keys
     GATEWAY_MOCK_MODE: bool = False
 
+    # MongoDB Atlas Configuration
+    MONGODB_URI: str = Field(
+        default="mongodb+srv://talk_db_user:D6Emzx8Z87Sk9K4u@vrahad-analytics-cluste.laihf2o.mongodb.net/?appName=Vrahad-analytics-Cluster",
+        description="MongoDB connection URI",
+    )
+    MONGODB_USERNAME: str = "talk_db_user"
+    MONGODB_PASSWORD: str = "D6Emzx8Z87Sk9K4u"
+    MONGODB_DB_NAME: str = "telemetria_agents"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

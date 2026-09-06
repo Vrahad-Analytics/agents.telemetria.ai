@@ -40,6 +40,21 @@ def create_project(req: CreateProjectRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(proj)
 
+    # Persist in MongoDB
+    try:
+        from backend.core.mongodb import projects_collection
+        from datetime import datetime
+        projects_collection.insert_one({
+            "_id": proj.id,
+            "id": proj.id,
+            "name": proj.name,
+            "org_id": proj.org_id,
+            "api_key_prefix": raw_key[:10] + "...",
+            "created_at": datetime.utcnow().isoformat()
+        })
+    except Exception:
+        pass
+
     return ProjectResponse(
         id=proj.id,
         name=proj.name,
