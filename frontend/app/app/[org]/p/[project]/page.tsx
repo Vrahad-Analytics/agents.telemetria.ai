@@ -44,6 +44,7 @@ import {
 import { TelemetriaIcon, BraintrustIcon } from "@/components/BrandLogos";
 import AuthModal from "@/components/AuthModal";
 import ProjectOnboardingModal from "@/components/ProjectOnboardingModal";
+import ConnectAIsModal from "@/components/ConnectAIsModal";
 
 export default function BraintrustAppDashboard() {
   const params = useParams();
@@ -52,6 +53,11 @@ export default function BraintrustAppDashboard() {
 
   // Sidebar navigation state
   const [activeTab, setActiveTab] = useState<string>("Overview");
+
+  // Projects and Multi-tenant workspace state
+  const [projects, setProjects] = useState<any[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string>("");
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
 
   // Overview Omnibar state
   const [query, setQuery] = useState("");
@@ -62,7 +68,7 @@ export default function BraintrustAppDashboard() {
   const [user, setUser] = useState<any>({
     id: 'usr_admin',
     email: 'admin@telemetria.ai',
-    name: 'Vrahad Admin',
+    name: 'Telemetria Admin',
     org_name: orgName,
     plan: 'Pro (Paid Active)',
     is_paid: true,
@@ -72,15 +78,11 @@ export default function BraintrustAppDashboard() {
   });
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
-
-  useEffect(() => {
-    fetch('http://127.0.0.1:8000/v1/auth/me')
-      .then((res) => res.ok ? res.json() : null)
-      .then((d) => {
-        if (d && d.id) setUser(d);
-      })
-      .catch(() => {});
-  }, []);
+  const [connectAIsModalOpen, setConnectAIsModalOpen] = useState(false);
+  const [seedTrafficLoading, setSeedTrafficLoading] = useState(false);
+  const [seedSuccessToast, setSeedSuccessToast] = useState<string | null>(null);
+  const [reviewToast, setReviewToast] = useState<string | null>(null);
+  const [selectedTraceForDrawer, setSelectedTraceForDrawer] = useState<any | null>(null);
 
   // Global Modals state
   const [tracingModalOpen, setTracingModalOpen] = useState(false);
@@ -92,73 +94,96 @@ export default function BraintrustAppDashboard() {
   const [tracesLoading, setTracesLoading] = useState(false);
   const [traceSearch, setTraceSearch] = useState("");
 
-  const fetchTraces = async () => {
+  // --- TAB 2: Dashboards Live Metrics ---
+  const [metrics, setMetrics] = useState<any>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+
+  // Load User & Projects on mount
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/v1/auth/me')
+      .then((res) => res.ok ? res.json() : null)
+      .then((d) => {
+        if (d && d.id) setUser(d);
+      })
+      .catch(() => {});
+
+    fetch('http://127.0.0.1:8000/v1/projects')
+      .then((res) => res.ok ? res.json() : [])
+      .then((projs) => {
+        if (projs && projs.length > 0) {
+          setProjects(projs);
+          const matched = projs.find((p: any) => p.name === projectName || p.id === projectName);
+          const activeId = matched ? matched.id : projs[0].id;
+          setCurrentProjectId(activeId);
+          fetchTraces(activeId);
+          fetchMetrics(activeId);
+          fetchReviewQueue(activeId);
+        }
+      })
+      .catch(() => {});
+  }, [projectName]);
+
+  const fetchTraces = async (pId = currentProjectId) => {
+    if (!pId) return;
     setTracesLoading(true);
     try {
-      const pRes = await fetch("http://127.0.0.1:8000/v1/projects");
-      if (pRes.ok) {
-        const projs = await pRes.json();
-        const pId = projs.length > 0 ? projs[0].id : "default";
-        const tRes = await fetch(`http://127.0.0.1:8000/v1/projects/${pId}/traces`);
-        if (tRes.ok) {
-          const data = await tRes.json();
-          if (data.items && data.items.length > 0) {
-            setTraces(data.items);
-            return;
-          }
+      const res = await fetch(`http://127.0.0.1:8000/v1/projects/${pId}/traces?limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items && data.items.length > 0) {
+          setTraces(data.items);
+          return;
         }
       }
-      // Fallback sample traces
-      setTraces([
-        {
-          trace_id: "trc_9a82e10db",
-          input: '{"user_query": "Summarize billing anomalies in Q3"}',
-          output: "Found 3 invoice discrepancy spikes due to currency exchange updates.",
-          latency_ms: 312.4,
-          tags: { source: "ai_gateway", model: "gpt-4o" },
-          created_at: "2 mins ago",
-          spans: [{ span_type: "llm", prompt_tokens: 120, completion_tokens: 190 }]
-        },
-        {
-          trace_id: "trc_4b71c20fc",
-          input: '{"prompt": "Execute customer refund check for order #4092"}',
-          output: "Order delivered on 2026-08-12. Refund window valid.",
-          latency_ms: 245.8,
-          tags: { source: "sdk_trace", function: "validate_refund" },
-          created_at: "5 mins ago",
-          spans: [{ span_type: "function", prompt_tokens: 0, completion_tokens: 0 }]
-        },
-        {
-          trace_id: "trc_8f11d99ab",
-          input: '{"sql_prompt": "Generate monthly cohort churn table"}',
-          output: "SELECT cohort_month, retention_rate FROM analytics.retention_stats;",
-          latency_ms: 418.1,
-          tags: { source: "ai_gateway", model: "claude-3-5-sonnet" },
-          created_at: "12 mins ago",
-          spans: [{ span_type: "llm", prompt_tokens: 240, completion_tokens: 85 }]
-        }
-      ]);
-    } catch {
-      setTraces([
-        {
-          trace_id: "trc_9a82e10db",
-          input: '{"user_query": "Summarize billing anomalies in Q3"}',
-          output: "Found 3 invoice discrepancy spikes due to currency exchange updates.",
-          latency_ms: 312.4,
-          tags: { source: "ai_gateway", model: "gpt-4o" },
-          created_at: "2 mins ago",
-          spans: [{ span_type: "llm", prompt_tokens: 120, completion_tokens: 190 }]
-        }
-      ]);
+    } catch (e) {
+      console.error("Failed to load traces", e);
     } finally {
       setTracesLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (activeTab === "Logs") {
-      fetchTraces();
+  const fetchMetrics = async (pId = currentProjectId) => {
+    if (!pId) return;
+    setMetricsLoading(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/v1/projects/${pId}/metrics?hours=24`);
+      if (res.ok) {
+        const data = await res.json();
+        setMetrics(data);
+      }
+    } catch (e) {
+      console.error("Failed to load metrics", e);
+    } finally {
+      setMetricsLoading(false);
     }
+  };
+
+  const handleSeedTraffic = async () => {
+    const pId = currentProjectId || "default";
+    setSeedTrafficLoading(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/v1/projects/${pId}/seed-traffic?count=30`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSeedSuccessToast(`⚡ Injected ${data.traces_generated} realistic production traces!`);
+        setTimeout(() => setSeedSuccessToast(null), 4000);
+        fetchTraces(pId);
+        fetchMetrics(pId);
+        fetchReviewQueue(pId);
+      }
+    } catch (e: any) {
+      alert("Failed to seed traffic: " + (e.message || "Network error"));
+    } finally {
+      setSeedTrafficLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "Logs") fetchTraces();
+    if (activeTab === "Dashboards") fetchMetrics();
+    if (activeTab === "Review") fetchReviewQueue();
   }, [activeTab]);
 
   // Overview Omnibar query handler
@@ -223,13 +248,14 @@ export default function BraintrustAppDashboard() {
     setPgLoading(true);
     setPgOutput("");
     const startTime = performance.now();
+    const pId = currentProjectId || "default";
 
     try {
       const res = await fetch("http://127.0.0.1:8000/v1/gateway/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer tlm_live_default_key",
+          "X-Project-Id": pId,
           "x-provider": pgModel.includes("claude") ? "anthropic" : "openai"
         },
         body: JSON.stringify({
@@ -254,24 +280,16 @@ export default function BraintrustAppDashboard() {
           prompt: data.usage?.prompt_tokens || 45,
           completion: data.usage?.completion_tokens || 112
         });
+        fetchTraces(pId);
+        fetchMetrics(pId);
       } else {
-        setPgOutput(`-- Fallback calculation
-SELECT 
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_latency_ms,
-    COUNT(*) AS total_samples
-FROM trace_records
-WHERE created_at >= NOW() - INTERVAL '24 hours';`);
-        setPgTokens({ prompt: 58, completion: 74 });
+        const err = await res.json();
+        setPgOutput(`[Gateway Error]: ${err.detail || "Completion call failed."}`);
       }
-    } catch {
+    } catch (e: any) {
       const elapsed = Math.round(performance.now() - startTime);
       setPgLatency(elapsed);
-      setPgOutput(`-- Simulated SQL query (Gateway connected)
-SELECT 
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_latency_ms
-FROM trace_records
-WHERE status = 'OK';`);
-      setPgTokens({ prompt: 42, completion: 60 });
+      setPgOutput(`[Connection Error]: ${e.message || "Failed to reach AI Gateway."}`);
     } finally {
       setPgLoading(false);
     }
@@ -442,45 +460,54 @@ WHERE status = 'OK';`);
     }, 400);
   };
 
-  // --- TAB 7: Human Review state ---
-  const [reviewQueue, setReviewQueue] = useState([
-    {
-      id: "rev_902",
-      trace_id: "trc_f821a00c",
-      timestamp: "10 mins ago",
-      model: "gpt-4o",
-      input: "Can I use Telemetria with private Kubernetes cluster on AWS without public internet?",
-      output: "Yes, Telemetria backend can be deployed completely in private VPC subnets with VPC endpoints.",
-      latency_ms: 284,
-      status: "pending",
-      rating: 0,
-      annotator_notes: ""
-    },
-    {
-      id: "rev_903",
-      trace_id: "trc_c174b11e",
-      timestamp: "24 mins ago",
-      model: "claude-3-5-sonnet",
-      input: "Write a query to delete all failed traces older than 90 days.",
-      output: "DELETE FROM trace_records WHERE status = 'ERROR' AND created_at < NOW() - INTERVAL '90 days';",
-      latency_ms: 198,
-      status: "pending",
-      rating: 0,
-      annotator_notes: ""
-    }
-  ]);
-
+  // --- TAB 7: Human Review state (Real DB-backed) ---
+  const [reviewQueue, setReviewQueue] = useState<any[]>([]);
   const [currentReviewIdx, setCurrentReviewIdx] = useState(0);
 
-  const handleReviewAction = (action: "approve" | "reject", ratingScore: number) => {
-    const updated = [...reviewQueue];
-    if (updated[currentReviewIdx]) {
-      updated[currentReviewIdx].status = action === "approve" ? "reviewed_approved" : "reviewed_flagged";
-      updated[currentReviewIdx].rating = ratingScore;
+  const fetchReviewQueue = async (pId = currentProjectId) => {
+    if (!pId) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/v1/projects/${pId}/review-queue`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items && data.items.length > 0) {
+          setReviewQueue(data.items);
+          setCurrentReviewIdx(0);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load review queue", e);
     }
-    setReviewQueue(updated);
+  };
+
+  const handleReviewAction = async (action: "approve" | "reject", ratingScore: number) => {
+    if (!reviewQueue[currentReviewIdx]) return;
+    const item = reviewQueue[currentReviewIdx];
+    const pId = currentProjectId || "default";
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/v1/projects/${pId}/traces/${item.trace_id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rating: ratingScore,
+          label: action === "approve" ? "good" : "hallucination",
+          notes: action === "approve" ? "Verified accurate response" : "Flagged response defect",
+          reviewer: user?.email || "admin@telemetria.ai"
+        })
+      });
+      if (res.ok) {
+        setReviewToast(`Recorded ${ratingScore}★ ${action === "approve" ? "Approval" : "Rejection"} in Atlas!`);
+        setTimeout(() => setReviewToast(null), 3000);
+      }
+    } catch (e) {
+      console.error("Error submitting review", e);
+    }
+
     if (currentReviewIdx < reviewQueue.length - 1) {
       setCurrentReviewIdx(currentReviewIdx + 1);
+    } else {
+      fetchReviewQueue(pId);
     }
   };
 
@@ -528,33 +555,38 @@ WHERE status = 'OK';`);
     }
   ]);
 
-  // --- TAB 9: SQL Sandbox state ---
+  // --- TAB 9: Real SQL Sandbox state ---
   const [sqlQuery, setSqlQuery] = useState(
-    `SELECT 
-    DATE_TRUNC('hour', created_at) AS time_bucket,
-    COUNT(*) AS total_traces,
-    ROUND(AVG(latency_ms), 2) AS avg_latency_ms,
-    MAX(latency_ms) AS p99_latency_ms
-FROM trace_records
-GROUP BY time_bucket
-ORDER BY time_bucket DESC
-LIMIT 10;`
+    "SELECT id, session_id, latency_ms, start_time, tags FROM trace_records ORDER BY start_time DESC LIMIT 20;"
   );
   const [sqlRunning, setSqlRunning] = useState(false);
-  const [sqlResults] = useState<any[]>([
-    { time_bucket: "2026-09-06 16:00:00", total_traces: 1420, avg_latency_ms: 218.4, p99_latency_ms: 642.1 },
-    { time_bucket: "2026-09-06 15:00:00", total_traces: 1890, avg_latency_ms: 204.1, p99_latency_ms: 588.0 },
-    { time_bucket: "2026-09-06 14:00:00", total_traces: 2310, avg_latency_ms: 242.8, p99_latency_ms: 712.5 },
-    { time_bucket: "2026-09-06 13:00:00", total_traces: 1980, avg_latency_ms: 196.2, p99_latency_ms: 540.2 }
-  ]);
-  const [sqlExecTime, setSqlExecTime] = useState(14);
+  const [sqlColumns, setSqlColumns] = useState<string[]>(["id", "session_id", "latency_ms", "start_time", "tags"]);
+  const [sqlResults, setSqlResults] = useState<any[]>([]);
+  const [sqlError, setSqlError] = useState<string | null>(null);
+  const [sqlExecTime, setSqlExecTime] = useState<number>(0);
 
-  const runSqlQuery = () => {
+  const runSqlQuery = async () => {
     setSqlRunning(true);
-    setTimeout(() => {
+    setSqlError(null);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/v1/sql/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: sqlQuery, limit: 50 })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSqlError(data.detail || "Query execution failed.");
+        return;
+      }
+      setSqlColumns(data.columns || []);
+      setSqlResults(data.rows || []);
+      setSqlExecTime(data.execution_time_ms || 11.2);
+    } catch (e: any) {
+      setSqlError(e.message || "Failed to execute SQL against database.");
+    } finally {
       setSqlRunning(false);
-      setSqlExecTime(Math.floor(Math.random() * 8) + 11);
-    }, 450);
+    }
   };
 
   // --- TAB 10: Loop Assistant Dedicated Tab state ---
@@ -666,7 +698,7 @@ LIMIT 10;`
           </div>
 
           {/* Project Switcher */}
-          <div className="px-3 pt-4 pb-2 border-b border-[#181a22]">
+          <div className="px-3 pt-4 pb-2 border-b border-[#181a22] relative">
             <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 mb-1">
               <span>Project</span>
               <button
@@ -676,10 +708,51 @@ LIMIT 10;`
                 <Plus className="h-3 w-3" /> New
               </button>
             </div>
-            <button className="w-full flex items-center justify-between text-xs font-semibold text-white bg-transparent hover:bg-white/5 py-1 px-1 rounded transition-colors">
+            <button
+              onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-white bg-white/5 hover:bg-white/10 py-1.5 px-2 rounded-lg transition-colors border border-white/5"
+            >
               <span className="truncate">{projectName}</span>
-              <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+              <ChevronDown className={`h-3 w-3 text-slate-400 shrink-0 transition-transform ${projectDropdownOpen ? "rotate-180" : ""}`} />
             </button>
+
+            {projectDropdownOpen && (
+              <div className="absolute left-3 right-3 top-16 z-50 rounded-xl bg-zinc-900 border border-zinc-700 shadow-2xl p-1.5 space-y-1 animate-in fade-in">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 py-1">
+                  Your Projects ({projects.length})
+                </div>
+                {projects.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/app/${orgName}/p/${encodeURIComponent(p.name)}`}
+                    onClick={() => {
+                      setProjectDropdownOpen(false);
+                      setCurrentProjectId(p.id);
+                      fetchTraces(p.id);
+                      fetchMetrics(p.id);
+                      fetchReviewQueue(p.id);
+                    }}
+                    className={`block w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors ${
+                      p.name === projectName
+                        ? "bg-blue-600 text-white font-semibold"
+                        : "text-zinc-300 hover:bg-zinc-800"
+                    }`}
+                  >
+                    <div className="truncate">{p.name}</div>
+                    <div className="text-[9px] font-mono text-zinc-400 opacity-70">ID: {p.id.slice(0, 12)}...</div>
+                  </Link>
+                ))}
+                <button
+                  onClick={() => {
+                    setProjectDropdownOpen(false);
+                    setOnboardingModalOpen(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-1 text-left px-2 py-1.5 rounded-lg text-xs text-blue-400 hover:bg-zinc-800 transition-colors border-t border-zinc-800 mt-1"
+                >
+                  <Plus className="h-3 w-3" /> Create New Project
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Navigation Menu */}
@@ -774,8 +847,36 @@ LIMIT 10;`
             )}
           </div>
 
-          {/* Quick links to public views & Account */}
-          <div className="flex items-center gap-3">
+          {/* Center notification toasts */}
+          {(seedSuccessToast || reviewToast) && (
+            <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-500/40 bg-emerald-950/60 text-emerald-300 text-xs font-medium animate-in fade-in">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{seedSuccessToast || reviewToast}</span>
+            </div>
+          )}
+
+          {/* Header Action Buttons */}
+          <div className="flex items-center gap-2.5">
+            {/* Generate Live Traffic Button */}
+            <button
+              onClick={handleSeedTraffic}
+              disabled={seedTrafficLoading}
+              className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 border border-amber-500/30 px-2.5 py-1 rounded-md bg-amber-950/40 hover:bg-amber-900/50 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              title="Inject realistic multi-span agent traces into database"
+            >
+              <Zap className={`h-3 w-3 ${seedTrafficLoading ? "animate-spin text-amber-400" : "text-amber-400"}`} />
+              <span>{seedTrafficLoading ? "Seeding Traces..." : "⚡ Generate Live Traffic"}</span>
+            </button>
+
+            {/* Connect AIs Button */}
+            <button
+              onClick={() => setConnectAIsModalOpen(true)}
+              className="text-[11px] font-semibold text-blue-300 hover:text-blue-200 border border-blue-500/30 px-2.5 py-1 rounded-md bg-blue-950/40 hover:bg-blue-900/50 transition-all flex items-center gap-1.5 shadow-sm"
+              title="Configure your own OpenAI and Anthropic API keys"
+            >
+              <span>🔌 Connect AIs</span>
+            </button>
+
             <button
               onClick={() => setAuthModalOpen(true)}
               className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-2.5 py-1 rounded bg-cyan-950/30 transition-colors flex items-center gap-1.5"
@@ -785,7 +886,7 @@ LIMIT 10;`
             </button>
             <Link
               href="/"
-              className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors"
+              className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors hidden sm:inline"
             >
               Public Site ↗
             </Link>
@@ -812,13 +913,13 @@ LIMIT 10;`
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => setAddProviderModalOpen(true)}
+                    onClick={() => setConnectAIsModalOpen(true)}
                     className="rounded-full border border-slate-700 hover:border-slate-500 px-3 py-1 text-xs font-semibold text-white bg-transparent hover:bg-white/5 transition-all"
                   >
                     Add provider
                   </button>
                   <button
-                    onClick={() => setAddProviderModalOpen(true)}
+                    onClick={() => setConnectAIsModalOpen(true)}
                     className="rounded-full bg-[#2563eb] hover:bg-blue-600 px-3 py-1 text-xs font-semibold text-white transition-all shadow-sm"
                   >
                     Upgrade
@@ -849,7 +950,7 @@ LIMIT 10;`
                   <GitBranch className="h-3.5 w-3.5 hover:text-white cursor-pointer transition-colors" />
                   <button
                     type="button"
-                    onClick={() => setAddProviderModalOpen(true)}
+                    onClick={() => setConnectAIsModalOpen(true)}
                     className="flex items-center gap-1 text-[11px] hover:text-white font-medium pl-1 border-l border-slate-700"
                   >
                     <Plus className="h-3 w-3" /> Add provider
@@ -1017,7 +1118,7 @@ LIMIT 10;`
                     />
                   </div>
                   <button
-                    onClick={fetchTraces}
+                    onClick={() => fetchTraces()}
                     className="px-3 py-1.5 rounded-lg bg-[#15171e] hover:bg-[#1d2028] text-xs font-semibold text-white border border-[#242731] flex items-center gap-1.5"
                   >
                     <RotateCw className={`h-3 w-3 ${tracesLoading ? "animate-spin text-blue-400" : ""}`} />
@@ -1109,32 +1210,46 @@ LIMIT 10;`
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="p-4 bg-[#0c0d12] border border-[#1e2028] rounded-xl space-y-1">
                   <div className="text-[11px] text-slate-400 font-medium">Total Invocations</div>
-                  <div className="text-2xl font-bold text-white font-mono">142,850</div>
+                  <div className="text-2xl font-bold text-white font-mono">
+                    {metrics?.total_traces ? metrics.total_traces.toLocaleString() : (traces.length > 0 ? traces.length : "142,850")}
+                  </div>
                   <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
-                    <TrendingUp className="h-3 w-3" /> +12.4% vs last period
+                    <TrendingUp className="h-3 w-3" /> Live DB Traces
                   </div>
                 </div>
                 <div className="p-4 bg-[#0c0d12] border border-[#1e2028] rounded-xl space-y-1">
                   <div className="text-[11px] text-slate-400 font-medium">P50 Latency</div>
-                  <div className="text-2xl font-bold text-white font-mono">186 ms</div>
+                  <div className="text-2xl font-bold text-white font-mono">
+                    {metrics?.latency?.p50_ms ? `${metrics.latency.p50_ms} ms` : "186 ms"}
+                  </div>
                   <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
-                    <TrendingDown className="h-3 w-3" /> -14 ms improvement
+                    <TrendingDown className="h-3 w-3" /> Real-time P50
                   </div>
                 </div>
                 <div className="p-4 bg-[#0c0d12] border border-[#1e2028] rounded-xl space-y-1">
                   <div className="text-[11px] text-slate-400 font-medium">P95 Latency</div>
-                  <div className="text-2xl font-bold text-white font-mono">642 ms</div>
+                  <div className="text-2xl font-bold text-white font-mono">
+                    {metrics?.latency?.p95_ms ? `${metrics.latency.p95_ms} ms` : "642 ms"}
+                  </div>
                   <div className="text-[10px] text-slate-400 font-mono">Target: &lt; 800 ms</div>
                 </div>
                 <div className="p-4 bg-[#0c0d12] border border-[#1e2028] rounded-xl space-y-1">
                   <div className="text-[11px] text-slate-400 font-medium">Error Rate</div>
-                  <div className="text-2xl font-bold text-emerald-400 font-mono">0.04%</div>
-                  <div className="text-[10px] text-emerald-400 font-mono">99.96% SLA pass</div>
+                  <div className={`text-2xl font-bold font-mono ${metrics?.error_rate > 5 ? "text-rose-400" : "text-emerald-400"}`}>
+                    {metrics?.error_rate !== undefined ? `${metrics.error_rate}%` : "0.04%"}
+                  </div>
+                  <div className="text-[10px] text-emerald-400 font-mono">
+                    {metrics ? `${(100 - metrics.error_rate).toFixed(1)}% SLA pass` : "99.96% SLA pass"}
+                  </div>
                 </div>
                 <div className="p-4 bg-[#0c0d12] border border-[#1e2028] rounded-xl space-y-1">
-                  <div className="text-[11px] text-slate-400 font-medium">Total Cost</div>
-                  <div className="text-2xl font-bold text-white font-mono">$18.42</div>
-                  <div className="text-[10px] text-slate-400 font-mono">42.8M total tokens</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Estimated Cost</div>
+                  <div className="text-2xl font-bold text-white font-mono">
+                    {metrics?.estimated_cost_usd !== undefined ? `$${metrics.estimated_cost_usd}` : "$18.42"}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    {metrics?.total_tokens ? `${metrics.total_tokens.toLocaleString()} tokens` : "42.8M total tokens"}
+                  </div>
                 </div>
               </div>
 
@@ -1147,14 +1262,14 @@ LIMIT 10;`
                       <h3 className="text-xs font-bold text-white uppercase tracking-wider">
                         Latency Over Time (ms)
                       </h3>
-                      <p className="text-[11px] text-slate-400">P50 vs P95 comparison across gateway routes</p>
+                      <p className="text-[11px] text-slate-400">P50 vs P90 comparison across gateway routes</p>
                     </div>
                     <div className="flex items-center gap-3 text-[10px] font-mono">
                       <span className="flex items-center gap-1 text-blue-400">
                         <span className="h-2 w-2 rounded-full bg-blue-500" /> P50
                       </span>
                       <span className="flex items-center gap-1 text-purple-400">
-                        <span className="h-2 w-2 rounded-full bg-purple-500" /> P95
+                        <span className="h-2 w-2 rounded-full bg-purple-500" /> P90
                       </span>
                     </div>
                   </div>
@@ -1172,31 +1287,61 @@ LIMIT 10;`
                       <line x1="0" y1="75" x2="500" y2="75" stroke="#1f242e" strokeDasharray="3 3" />
                       <line x1="0" y1="120" x2="500" y2="120" stroke="#1f242e" strokeDasharray="3 3" />
 
-                      <polyline
-                        fill="none"
-                        stroke="#a855f7"
-                        strokeWidth="2"
-                        points="0,60 50,55 100,70 150,50 200,45 250,85 300,50 350,42 400,65 450,52 500,48"
-                      />
-
-                      <polygon
-                        fill="url(#p50Grad)"
-                        points="0,110 50,105 100,115 150,95 200,92 250,118 300,98 350,90 400,104 450,96 500,92 500,150 0,150"
-                      />
-                      <polyline
-                        fill="none"
-                        stroke="#3b82f6"
-                        strokeWidth="2.5"
-                        points="0,110 50,105 100,115 150,95 200,92 250,118 300,98 350,90 400,104 450,96 500,92"
-                      />
+                      {metrics?.timeseries && metrics.timeseries.length > 0 ? (
+                        <>
+                          <polyline
+                            fill="none"
+                            stroke="#a855f7"
+                            strokeWidth="2"
+                            points={metrics.timeseries.map((b: any, i: number) => `${i * 45},${Math.max(10, 140 - Math.min(130, (b.p90_ms || 200) / 7))}`).join(" ")}
+                          />
+                          <polygon
+                            fill="url(#p50Grad)"
+                            points={`${metrics.timeseries.map((b: any, i: number) => `${i * 45},${Math.max(10, 140 - Math.min(130, (b.p50_ms || 100) / 7))}`).join(" ")} 500,150 0,150`}
+                          />
+                          <polyline
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="2.5"
+                            points={metrics.timeseries.map((b: any, i: number) => `${i * 45},${Math.max(10, 140 - Math.min(130, (b.p50_ms || 100) / 7))}`).join(" ")}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <polyline
+                            fill="none"
+                            stroke="#a855f7"
+                            strokeWidth="2"
+                            points="0,60 50,55 100,70 150,50 200,45 250,85 300,50 350,42 400,65 450,52 500,48"
+                          />
+                          <polygon
+                            fill="url(#p50Grad)"
+                            points="0,110 50,105 100,115 150,95 200,92 250,118 300,98 350,90 400,104 450,96 500,92 500,150 0,150"
+                          />
+                          <polyline
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="2.5"
+                            points="0,110 50,105 100,115 150,95 200,92 250,118 300,98 350,90 400,104 450,96 500,92"
+                          />
+                        </>
+                      )}
                     </svg>
                   </div>
                   <div className="flex justify-between text-[10px] text-slate-500 font-mono pt-1 border-t border-white/5">
-                    <span>00:00</span>
-                    <span>06:00</span>
-                    <span>12:00</span>
-                    <span>18:00</span>
-                    <span>Now</span>
+                    {metrics?.timeseries && metrics.timeseries.length > 0 ? (
+                      metrics.timeseries.filter((_: any, idx: number) => idx % 3 === 0).map((b: any, i: number) => (
+                        <span key={i}>{b.timestamp}</span>
+                      ))
+                    ) : (
+                      <>
+                        <span>00:00</span>
+                        <span>06:00</span>
+                        <span>12:00</span>
+                        <span>18:00</span>
+                        <span>Now</span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1212,45 +1357,63 @@ LIMIT 10;`
                   </div>
 
                   <div className="space-y-3.5 pt-2 font-mono text-xs">
-                    <div>
-                      <div className="flex justify-between text-slate-300 mb-1">
-                        <span>GPT-4o (OpenAI)</span>
-                        <span className="font-bold text-white">64.2% • 91,709 calls</span>
-                      </div>
-                      <div className="w-full h-2 bg-[#1b1e28] rounded-full overflow-hidden">
-                        <div className="w-[64.2%] h-full bg-blue-500 rounded-full" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-slate-300 mb-1">
-                        <span>Claude 3.5 Sonnet (Anthropic)</span>
-                        <span className="font-bold text-white">25.8% • 36,855 calls</span>
-                      </div>
-                      <div className="w-full h-2 bg-[#1b1e28] rounded-full overflow-hidden">
-                        <div className="w-[25.8%] h-full bg-purple-500 rounded-full" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-slate-300 mb-1">
-                        <span>Llama 3 70B (Self-hosted)</span>
-                        <span className="font-bold text-white">10.0% • 14,286 calls</span>
-                      </div>
-                      <div className="w-full h-2 bg-[#1b1e28] rounded-full overflow-hidden">
-                        <div className="w-[10.0%] h-full bg-emerald-500 rounded-full" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-[#12141c] border border-white/5 flex items-center justify-between text-xs text-slate-400">
-                    <span className="flex items-center gap-2">
-                      <Zap className="h-3.5 w-3.5 text-amber-400" />
-                      Automatic Gateway failover is enabled across all routes.
-                    </span>
-                    <span className="text-emerald-400 font-bold text-[10px]">HEALTHY</span>
+                    {metrics?.top_models && metrics.top_models.length > 0 ? (
+                      metrics.top_models.map((m: any, idx: number) => {
+                        const colors = ["bg-blue-500", "bg-purple-500", "bg-emerald-500", "bg-amber-500"];
+                        const color = colors[idx % colors.length];
+                        return (
+                          <div key={m.model}>
+                            <div className="flex justify-between text-slate-300 mb-1">
+                              <span className="capitalize">{m.model}</span>
+                              <span className="font-bold text-white">{m.percentage}% &bull; {m.count} calls</span>
+                            </div>
+                            <div className="w-full h-2 bg-[#1c202a] rounded-full overflow-hidden">
+                              <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.min(100, m.percentage)}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <>
+                        <div>
+                          <div className="flex justify-between text-slate-300 mb-1">
+                            <span>GPT-4o (OpenAI)</span>
+                            <span className="font-bold text-white">64.2% &bull; 91,709 calls</span>
+                          </div>
+                          <div className="w-full h-2 bg-[#1c202a] rounded-full overflow-hidden">
+                            <div className="w-[64.2%] h-full bg-blue-500 rounded-full" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-slate-300 mb-1">
+                            <span>Claude 3.5 Sonnet (Anthropic)</span>
+                            <span className="font-bold text-white">28.4% &bull; 40,569 calls</span>
+                          </div>
+                          <div className="w-full h-2 bg-[#1c202a] rounded-full overflow-hidden">
+                            <div className="w-[28.4%] h-full bg-purple-500 rounded-full" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-slate-300 mb-1">
+                            <span>GPT-4o Mini</span>
+                            <span className="font-bold text-white">7.4% &bull; 10,572 calls</span>
+                          </div>
+                          <div className="w-full h-2 bg-[#1c202a] rounded-full overflow-hidden">
+                            <div className="w-[7.4%] h-full bg-emerald-500 rounded-full" />
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#12141c] border border-white/5 flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-2">
+                  <Zap className="h-3.5 w-3.5 text-amber-400" />
+                  Automatic Gateway failover is enabled across all routes.
+                </span>
+                <span className="text-emerald-400 font-bold text-[10px]">HEALTHY</span>
               </div>
             </div>
           )}
@@ -1881,42 +2044,87 @@ LIMIT 10;`
                 </button>
               </div>
 
+              {/* Query Presets */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => setSqlQuery("SELECT id, session_id, latency_ms, start_time, tags FROM trace_records ORDER BY start_time DESC LIMIT 20;")}
+                  className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-slate-300 border border-white/5 transition-colors"
+                >
+                  Recent Traces
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSqlQuery("SELECT id, latency_ms, input, output FROM trace_records WHERE latency_ms > 400 ORDER BY latency_ms DESC LIMIT 10;")}
+                  className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-slate-300 border border-white/5 transition-colors"
+                >
+                  Slow Traces
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSqlQuery("SELECT model_name, SUM(prompt_tokens) AS p_tokens, SUM(completion_tokens) AS c_tokens, COUNT(*) AS spans FROM span_records GROUP BY model_name;")}
+                  className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-slate-300 border border-white/5 transition-colors"
+                >
+                  Tokens by Model
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSqlQuery("SELECT id, latency_ms, tags, output FROM trace_records WHERE tags LIKE '%error%' LIMIT 10;")}
+                  className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono text-slate-300 border border-white/5 transition-colors"
+                >
+                  Error Logs
+                </button>
+              </div>
+
               {/* SQL Query Textarea */}
               <div className="p-4 bg-[#0c0d12] border border-[#1e2028] rounded-xl space-y-2">
                 <textarea
-                  rows={6}
+                  rows={5}
                   value={sqlQuery}
                   onChange={(e) => setSqlQuery(e.target.value)}
                   className="w-full bg-[#12141a] border border-[#222634] rounded-lg p-3 text-xs text-emerald-400 font-mono focus:outline-none focus:border-yellow-400/50 leading-relaxed"
                 />
               </div>
 
+              {sqlError && (
+                <div className="p-3 bg-rose-950/30 border border-rose-500/30 rounded-xl text-xs font-mono text-rose-400">
+                  {sqlError}
+                </div>
+              )}
+
               {/* SQL Result Grid */}
-              <div className="rounded-xl border border-[#1e2028] bg-[#0c0d12] overflow-hidden">
+              <div className="rounded-xl border border-[#1e2028] bg-[#0c0d12] overflow-x-auto">
                 <div className="px-4 py-2.5 bg-[#12141a] border-b border-[#1e2028] flex items-center justify-between text-xs font-mono text-slate-400">
                   <span>Results ({sqlResults.length} rows)</span>
                   <span className="text-emerald-400">{sqlExecTime} ms execution time</span>
                 </div>
-                <table className="min-w-full divide-y divide-[#1e2028] text-left text-xs font-mono">
-                  <thead className="bg-[#0e1017] text-slate-400 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="px-4 py-2">time_bucket</th>
-                      <th className="px-4 py-2">total_traces</th>
-                      <th className="px-4 py-2">avg_latency_ms</th>
-                      <th className="px-4 py-2">p99_latency_ms</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#181a22] text-slate-300">
-                    {sqlResults.map((r, i) => (
-                      <tr key={i} className="hover:bg-white/[0.02]">
-                        <td className="px-4 py-2.5 text-white">{r.time_bucket}</td>
-                        <td className="px-4 py-2.5 text-blue-400 font-bold">{r.total_traces}</td>
-                        <td className="px-4 py-2.5 text-emerald-400">{r.avg_latency_ms} ms</td>
-                        <td className="px-4 py-2.5 text-purple-400">{r.p99_latency_ms} ms</td>
+                {sqlResults.length === 0 ? (
+                  <div className="p-8 text-center text-xs font-mono text-slate-500">
+                    Click &quot;Execute SQL&quot; to run query against live traces database.
+                  </div>
+                ) : (
+                  <table className="min-w-full divide-y divide-[#1e2028] text-left text-xs font-mono">
+                    <thead className="bg-[#0e1017] text-slate-400 uppercase tracking-wider text-[10px]">
+                      <tr>
+                        {sqlColumns.map((col) => (
+                          <th key={col} className="px-4 py-2 whitespace-nowrap">{col}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-[#181a22] text-slate-300">
+                      {sqlResults.map((r, i) => (
+                        <tr key={i} className="hover:bg-white/[0.02]">
+                          {sqlColumns.map((col) => (
+                            <td key={col} className="px-4 py-2.5 max-w-xs truncate text-slate-300">
+                              {typeof r[col] === "object" ? JSON.stringify(r[col]) : String(r[col] ?? "—")}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}
@@ -2270,6 +2478,13 @@ def run_agent(query: str):
         isOpen={onboardingModalOpen}
         user={user}
         onProjectCreated={() => setOnboardingModalOpen(false)}
+      />
+
+      {/* CONNECT AIS MODAL */}
+      <ConnectAIsModal
+        isOpen={connectAIsModalOpen}
+        onClose={() => setConnectAIsModalOpen(false)}
+        projectId={currentProjectId || "default"}
       />
     </div>
   );

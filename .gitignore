@@ -21,6 +21,8 @@ frontend/.next/
 frontend/out/
 frontend/.turbo/
 .DS_Store
+*.tsbuildinfo
+
 
 # Terraform
 infra/.terraform/
