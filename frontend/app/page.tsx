@@ -312,9 +312,9 @@ export default function BraintrustLandingPage() {
       {/* 5. FOOTER */}
       <footer className="border-t border-slate-200 bg-white py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2 text-slate-800 font-bold">
-            <span className="text-brand-blue font-mono font-black text-xl">✦</span>
-            <span>Braintrust • Telemetria Active Observability</span>
+          <div className="flex items-center gap-2.5 text-slate-900 font-bold">
+            <span className="text-cyan-600 font-mono font-black text-xl">✦</span>
+            <span>agents.telemetria.ai • Autonomous Agent Observability & Evals</span>
           </div>
 
           <div className="flex items-center gap-6 text-sm text-slate-500 font-medium">
@@ -327,7 +327,7 @@ export default function BraintrustLandingPage() {
           </div>
 
           <div className="text-xs text-slate-400">
-            © 2026 Telemetria AI. Functionally equivalent to Braintrust.
+            © 2026 agents.telemetria.ai • Built for High-Stakes Production AI Agents
           </div>
         </div>
       </footer>

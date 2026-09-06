@@ -41,7 +41,9 @@ import {
   TrendingDown,
   Zap
 } from "lucide-react";
-import { BraintrustIcon } from "@/components/BrandLogos";
+import { TelemetriaIcon, BraintrustIcon } from "@/components/BrandLogos";
+import AuthModal from "@/components/AuthModal";
+import ProjectOnboardingModal from "@/components/ProjectOnboardingModal";
 
 export default function BraintrustAppDashboard() {
   const params = useParams();
@@ -55,6 +57,30 @@ export default function BraintrustAppDashboard() {
   const [query, setQuery] = useState("");
   const [loopLoading, setLoopLoading] = useState(false);
   const [loopResponse, setLoopResponse] = useState<string | null>(null);
+
+  // User & Onboarding state
+  const [user, setUser] = useState<any>({
+    id: 'usr_admin',
+    email: 'admin@telemetria.ai',
+    name: 'Vrahad Admin',
+    org_name: orgName,
+    plan: 'Pro (Paid Active)',
+    is_paid: true,
+    plan_credits: 84.50,
+    logs_quota_gb: 50.0,
+    evals_quota: 100000
+  });
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/v1/auth/me')
+      .then((res) => res.ok ? res.json() : null)
+      .then((d) => {
+        if (d && d.id) setUser(d);
+      })
+      .catch(() => {});
+  }, []);
 
   // Global Modals state
   const [tracingModalOpen, setTracingModalOpen] = useState(false);
@@ -154,7 +180,7 @@ export default function BraintrustAppDashboard() {
         body: JSON.stringify({
           model: "gpt-4o",
           messages: [
-            { role: "system", content: "You are Loop, the AI assistant inside Braintrust." },
+            { role: "system", content: "You are Loop, the AI assistant inside agents.telemetria.ai." },
             { role: "user", content: query }
           ],
           stream: false
@@ -566,7 +592,7 @@ LIMIT 10;`
             {
               role: "system",
               content:
-                "You are Loop, the expert AI assistant inside the Braintrust / Telemetria AI platform. Answer questions about prompt engineering, evaluations, traces, SQL sandbox queries, and latency."
+                "You are Loop, the expert AI assistant inside agents.telemetria.ai platform. Answer questions about prompt engineering, evaluations, traces, SQL sandbox queries, and latency."
             },
             ...loopMessages.map((m) => ({ role: m.role, content: m.text })),
             { role: "user", content: userText }
@@ -640,11 +666,19 @@ LIMIT 10;`
           </div>
 
           {/* Project Switcher */}
-          <div className="px-3 pt-4 pb-2">
-            <div className="text-[11px] font-medium text-slate-500 mb-1">Project</div>
+          <div className="px-3 pt-4 pb-2 border-b border-[#181a22]">
+            <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 mb-1">
+              <span>Project</span>
+              <button
+                onClick={() => setOnboardingModalOpen(true)}
+                className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-0.5"
+              >
+                <Plus className="h-3 w-3" /> New
+              </button>
+            </div>
             <button className="w-full flex items-center justify-between text-xs font-semibold text-white bg-transparent hover:bg-white/5 py-1 px-1 rounded transition-colors">
-              <span>{projectName}</span>
-              <ChevronDown className="h-3 w-3 text-slate-400" />
+              <span className="truncate">{projectName}</span>
+              <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
             </button>
           </div>
 
@@ -671,43 +705,55 @@ LIMIT 10;`
           </nav>
         </div>
 
-        {/* Bottom Plan Usage Box */}
-        <div className="p-3 border-t border-[#1a1c24] bg-[#0c0d11]">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-2">
-            <span>Starter plan usage</span>
-            <ArrowUpRight className="h-3 w-3 text-slate-500 hover:text-white cursor-pointer" />
+        {/* Bottom Plan Usage Box - Telemetria Paid Pro Plan */}
+        <div className="p-3 border-t border-[#1a1c24] bg-[#090b10] space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-bold text-white tracking-tight">Telemetria Pro Plan</span>
+            </div>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-mono font-bold">
+              PAID ACTIVE
+            </span>
           </div>
 
           <div className="space-y-2 text-[10px] text-slate-400 font-mono">
             <div>
               <div className="flex justify-between mb-0.5">
-                <span>Model credits</span>
-                <span>$0 of $10</span>
+                <span className="text-slate-300">Model credits</span>
+                <span className="text-cyan-400 font-bold">$84.50 of $100</span>
               </div>
-              <div className="w-full h-1 bg-[#20222a] rounded-full overflow-hidden">
-                <div className="w-0 h-full bg-blue-500" />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between mb-0.5">
-                <span>Logs</span>
-                <span>0 GB of 1 GB</span>
-              </div>
-              <div className="w-full h-1 bg-[#20222a] rounded-full overflow-hidden">
-                <div className="w-0 h-full bg-blue-500" />
+              <div className="w-full h-1 bg-[#1a1e28] rounded-full overflow-hidden">
+                <div className="w-[84.5%] h-full bg-gradient-to-r from-cyan-500 to-blue-500" />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between mb-0.5">
-                <span>Scores</span>
-                <span>0 of 10,000</span>
+                <span className="text-slate-300">Ingestion logs</span>
+                <span className="text-purple-400 font-bold">4.2 GB of 50 GB</span>
               </div>
-              <div className="w-full h-1 bg-[#20222a] rounded-full overflow-hidden">
-                <div className="w-0 h-full bg-blue-500" />
+              <div className="w-full h-1 bg-[#1a1e28] rounded-full overflow-hidden">
+                <div className="w-[8.4%] h-full bg-purple-500" />
               </div>
             </div>
+
+            <div>
+              <div className="flex justify-between mb-0.5">
+                <span className="text-slate-300">Evaluated scores</span>
+                <span className="text-emerald-400 font-bold">42,850 of 100k</span>
+              </div>
+              <div className="w-full h-1 bg-[#1a1e28] rounded-full overflow-hidden">
+                <div className="w-[42.8%] h-full bg-emerald-500" />
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-1.5 border-t border-white/5 flex items-center justify-between text-[9px] text-slate-500 font-mono">
+            <span className="flex items-center gap-1">
+              <Database className="h-2.5 w-2.5 text-emerald-400" /> MongoDB Atlas
+            </span>
+            <span className="text-emerald-400 font-bold">CONNECTED</span>
           </div>
         </div>
       </aside>
@@ -717,6 +763,8 @@ LIMIT 10;`
         {/* Top Breadcrumb Bar */}
         <header className="h-12 border-b border-[#181a22] flex items-center justify-between px-6 bg-[#07080a] shrink-0">
           <div className="text-xs font-semibold text-white flex items-center gap-2">
+            <span className="text-cyan-400 font-mono font-bold">agents.telemetria.ai</span>
+            <span className="text-slate-600">/</span>
             <span>{projectName}</span>
             {activeTab !== "Overview" && (
               <>
@@ -726,8 +774,15 @@ LIMIT 10;`
             )}
           </div>
 
-          {/* Quick links to public views */}
+          {/* Quick links to public views & Account */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-2.5 py-1 rounded bg-cyan-950/30 transition-colors flex items-center gap-1.5"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span>{user?.email || "admin@telemetria.ai"}</span>
+            </button>
             <Link
               href="/"
               className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors"
@@ -2051,14 +2106,14 @@ def run_agent(query: str):
           <div className="bg-[#0f1116] border border-[#242731] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Terminal className="h-4 w-4 text-blue-400" /> Install Braintrust CLI
+                <Terminal className="h-4 w-4 text-blue-400" /> Install telemetria CLI
               </h3>
               <button onClick={() => setCliModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <pre className="p-3 bg-black rounded-lg text-xs font-mono text-emerald-400">
-              npm install -g braintrust
+              npm install -g telemetria-cli
             </pre>
             <p className="text-xs text-slate-400">Or authenticate using Python SDK:</p>
             <pre className="p-3 bg-black rounded-lg text-xs font-mono text-emerald-400">
@@ -2199,6 +2254,23 @@ def run_agent(query: str):
           </form>
         </div>
       )}
+   
+      {/* AUTH MODAL */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={(u) => {
+          setUser(u);
+          setOnboardingModalOpen(true);
+        }}
+      />
+
+      {/* PROJECT ONBOARDING MODAL */}
+      <ProjectOnboardingModal
+        isOpen={onboardingModalOpen}
+        user={user}
+        onProjectCreated={() => setOnboardingModalOpen(false)}
+      />
     </div>
   );
 }

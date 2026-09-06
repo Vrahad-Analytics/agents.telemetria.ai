@@ -1,19 +1,41 @@
 import React from "react";
 
-export function BraintrustIcon({ className = "h-7 w-7 text-brand-blue" }: { className?: string }) {
+export function TelemetriaIcon({ className = "h-7 w-7 text-cyan-400" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      {/* 8-dot floral icon matching Braintrust */}
-      <circle cx="12" cy="4" r="2.5" />
-      <circle cx="17.65" cy="6.35" r="2.5" />
-      <circle cx="20" cy="12" r="2.5" />
-      <circle cx="17.65" cy="17.65" r="2.5" />
-      <circle cx="12" cy="20" r="2.5" />
-      <circle cx="6.35" cy="17.65" r="2.5" />
-      <circle cx="4" cy="12" r="2.5" />
-      <circle cx="6.35" cy="6.35" r="2.5" />
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="tlm-grad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#06b6d4" />
+          <stop offset="0.5" stopColor="#3b82f6" />
+          <stop offset="1" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      {/* Outer telemetry hexagon radar ring */}
+      <polygon
+        points="16,2 29,9.5 29,22.5 16,30 3,22.5 3,9.5"
+        stroke="url(#tlm-grad)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        fill="none"
+        opacity="0.9"
+      />
+      {/* Inner neural constellation lines */}
+      <line x1="16" y1="8" x2="10" y2="18" stroke="#38bdf8" strokeWidth="1.5" opacity="0.6" />
+      <line x1="16" y1="8" x2="22" y2="18" stroke="#818cf8" strokeWidth="1.5" opacity="0.6" />
+      <line x1="10" y1="18" x2="22" y2="18" stroke="#c084fc" strokeWidth="1.5" opacity="0.6" />
+      <line x1="16" y1="14" x2="16" y2="24" stroke="#06b6d4" strokeWidth="1.5" opacity="0.7" />
+      {/* Neural nodes */}
+      <circle cx="16" cy="8" r="2.5" fill="#38bdf8" />
+      <circle cx="10" cy="18" r="2.5" fill="#818cf8" />
+      <circle cx="22" cy="18" r="2.5" fill="#c084fc" />
+      <circle cx="16" cy="14" r="3.2" fill="#06b6d4" />
+      <circle cx="16" cy="24" r="2" fill="#38bdf8" />
     </svg>
   );
+}
+
+export function BraintrustIcon({ className = "h-7 w-7 text-brand-blue" }: { className?: string }) {
+  return <TelemetriaIcon className={className} />;
 }
 
 export function CustomerLogos() {
